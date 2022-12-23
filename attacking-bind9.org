@@ -1,0 +1,60 @@
+* Bind 9 Exploitation
+
+** Overall strategy
+This project is not really fit for dynamic analysis due to the extensive amount
+of work done in the fuzz/ and the near impossiblity this has in compiling.
+
+
+Git commit df0584b547d3a741db36bec3eb877424ab46e07f
+
+** Historical CVE analysis
+
+So there's two historical CVE's with code execution in the last 5 years.
+Honestly this isn't even as discouraging as most of the targets I look at
+nowadays
+
+*** CVE-2020-8625
+https://www.zerodayinitiative.com/blog/2021/2/24/cve-2020-8625-a-fifteen-year-old-rce-bug-returns-in-isc-bind-server
+
+... Is this yet another mulmalloc?  Alright, let's go ahead and write
+yet-another-codeql-for-mulmalloc :(
+
+I wish my job were remotely interesting sometime
+
+
+*** CVE-2021-25216
+
+Can't find any data on this one...
+
+** CodeqL Analysis with Default Queries
+
+Here's the ones that look interesting
+*** Stack use after free
+
+**** /bin/dnssec/dnssec-signzone.c:2245,2144,2083
+These are all various expansions of the macros
+#+BEGIN_SRC
+  ISC_LIST_APPEND(rdatalist.rdata, &rdata, link);
+#+END_SRC
+
+rdata is a local stack variable, so let's see what happens in the
+ISC_LIST_APPEND macro, and it's just a really simple linked list.  It assumes
+that the tail and list elements have standard linked list data structures
+inside.
+
+So it's pretty fair to assume that rdatalist.rdata will contain pointers to the
+stack frame of addnsec3param and other functions when the function returns.
+Accessing these pointers could lead to remote code executions
+
+
+**** /bin/named/server.c:3457,3417
+**** /lib/dns/diff.c:598 (via a parameter)
+**** /lib/dns/master.c:2517,2580,881,882
+**** /lib/dns/message.c:1767,1792 (via a parameter)
+**** /lib/dns/ncache.c:238
+**** /lib/dns/nsec.c:198
+**** /lib/ns/xfrout.c:149
+**** /lib/isccfg/aclconf.c:158
+**** /lib/dns/zone.c:17028
+**** /lib/dns/update.c:1542
+**** /lib/dns/rriterator.c:218 (via a parameter)
